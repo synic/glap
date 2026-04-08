@@ -1,0 +1,15 @@
+go 1.26.2
+
+use (
+	../..
+	../basic
+	../builder
+	../completions
+	../conflicts-requires
+	../env-override
+	../groups
+	../positional
+	../subcommands
+	../trailing-var-arg
+	../validator
+)
