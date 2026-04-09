@@ -2,7 +2,7 @@ package glap
 
 import (
 	"fmt"
-	"slices"
+	"sort"
 	"strings"
 )
 
@@ -92,8 +92,8 @@ func renderHelp(cmd *Command, long bool) string {
 	}
 
 	for gi := range groups {
-		slices.SortStableFunc(groups[gi].args, func(a, b *Arg) int {
-			return a.displayOrder - b.displayOrder
+		sort.SliceStable(groups[gi].args, func(i, j int) bool {
+			return groups[gi].args[i].displayOrder < groups[gi].args[j].displayOrder
 		})
 	}
 
@@ -112,8 +112,8 @@ func renderHelp(cmd *Command, long bool) string {
 	if len(cmd.subcommands) > 0 {
 		subs := make([]*Command, len(cmd.subcommands))
 		copy(subs, cmd.subcommands)
-		slices.SortStableFunc(subs, func(a, b *Command) int {
-			return a.displayOrder - b.displayOrder
+		sort.SliceStable(subs, func(i, j int) bool {
+			return subs[i].displayOrder < subs[j].displayOrder
 		})
 
 		b.WriteString("\n" + s.bold("SUBCOMMANDS:") + "\n")
@@ -127,7 +127,10 @@ func renderHelp(cmd *Command, long bool) string {
 				desc = sub.longAbout
 			}
 			if desc != "" {
-				pad := max(4, 20-len(sub.name))
+				pad := 20 - len(sub.name)
+				if pad < 4 {
+					pad = 4
+				}
 				line += strings.Repeat(" ", pad) + desc
 			}
 			b.WriteString(line + "\n")
@@ -156,7 +159,10 @@ func formatArgHelpStyled(a *Arg, long bool, s styler) string {
 	}
 
 	left := stripANSI(b.String())
-	pad := max(4, 30-len(left))
+	pad := 30 - len(left)
+	if pad < 4 {
+		pad = 4
+	}
 	b.WriteString(strings.Repeat(" ", pad))
 
 	help := a.help

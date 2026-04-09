@@ -1,6 +1,6 @@
 package glap
 
-import "slices"
+import "sort"
 
 // Command represents a CLI command or subcommand with its arguments and configuration.
 type Command struct {
@@ -282,8 +282,8 @@ func (c *Command) positionalArgs() []*Arg {
 		}
 	}
 
-	slices.SortStableFunc(indexed, func(a, b *Arg) int {
-		return a.index - b.index
+	sort.SliceStable(indexed, func(i, j int) bool {
+		return indexed[i].index < indexed[j].index
 	})
 
 	return append(indexed, unindexed...)

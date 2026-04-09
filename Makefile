@@ -4,7 +4,7 @@ GOIMPORTS_REVISER := go run github.com/incu6us/goimports-reviser/v3@latest
 EXAMPLES := $(filter-out examples/workspace,$(wildcard examples/*/main.go))
 EXAMPLES := $(patsubst examples/%/main.go,%,$(EXAMPLES))
 
-.PHONY: build clean test vet fmt fmt-fix check
+.PHONY: build clean test vet format format-check check
 
 build: clean
 	@mkdir -p $(BUILDDIR)
@@ -24,16 +24,16 @@ vet:
 		echo "Vetting examples/$(ex)" && \
 		GOWORK=$(GOWORK) go vet ./examples/$(ex) &&) true
 
-fmt:
+format-check:
 	@echo "Checking formatting..."
 	@test -z "$$(gofmt -l .)" || (gofmt -l . && exit 1)
 	@echo "Checking imports..."
 	@$(GOIMPORTS_REVISER) -list-diff -set-exit-status ./...
 
-fmt-fix:
+format:
 	@echo "Fixing formatting..."
 	@gofmt -w .
 	@echo "Fixing imports..."
 	@$(GOIMPORTS_REVISER) ./...
 
-check: fmt vet test
+check: format-check vet test

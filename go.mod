@@ -1,3 +1,3 @@
 module github.com/synic/glap
 
-go 1.26.2
+go 1.18
