@@ -194,13 +194,15 @@ func (c *Command) Parse(args []string) (*Matches, error) {
 }
 
 func runCallbacks(cmd *Command, m *Matches) error {
+	if cmd.run != nil {
+		if err := cmd.run(m); err != nil {
+			return err
+		}
+	}
 	if m.subcommandName != "" {
 		if sub := cmd.findSubcommand(m.subcommandName); sub != nil {
 			return runCallbacks(sub, m.subcommandMatches)
 		}
-	}
-	if cmd.run != nil {
-		return cmd.run(m)
 	}
 	return nil
 }

@@ -146,7 +146,7 @@ func TestRunCallbackError(t *testing.T) {
 	}
 }
 
-func TestRunCallbackNotCalledForParent(t *testing.T) {
+func TestRunCallbackCalledForParent(t *testing.T) {
 	parentCalled := false
 	app := NewCommand("myapp").
 		Run(func(m *Matches) error {
@@ -160,8 +160,8 @@ func TestRunCallbackNotCalledForParent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parentCalled {
-		t.Error("parent Run should not be called when subcommand matches")
+	if !parentCalled {
+		t.Error("parent Run should be called before subcommand Run")
 	}
 }
 
