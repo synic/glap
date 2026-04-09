@@ -43,24 +43,24 @@ type conditionalDefault struct {
 // declaratively via struct tags with the "glap" key. See each method's documentation
 // for the corresponding struct tag syntax.
 type Arg struct {
-	name           string
-	short          rune
-	long           string
-	help           string
-	envVar         string
-	defaultValue   string
-	required       bool
-	hidden         bool
-	global         bool
-	action         ArgAction
-	possibleValues []string
-	numArgs        NumArgs
-	valueName      string
-	aliases        []string
-	conflictsWith  []string
-	requires       []string
-	groupID        string
-	heading        string
+	name              string
+	short             rune
+	long              string
+	help              string
+	envVar            string
+	defaultValue      string
+	required          bool
+	hidden            bool
+	global            bool
+	action            ArgAction
+	possibleValues    []string
+	numArgs           NumArgs
+	valueName         string
+	aliases           []string
+	conflictsWith     []string
+	requires          []string
+	groupID           string
+	heading           string
 	positional        bool
 	validator         func(string) error
 	valueDelimiter    string
@@ -358,6 +358,20 @@ func (a *Arg) SetValueHint(hint ValueHint) *Arg {
 func (a *Arg) SetNumArgs(min, max int) *Arg {
 	a.numArgs = NumArgs{Min: min, Max: max, Set: true}
 	return a
+}
+
+// Clone returns a deep copy of this Arg, safe to add to multiple commands.
+func (a *Arg) Clone() *Arg {
+	c := *a
+	c.aliases = append([]string(nil), a.aliases...)
+	c.conflictsWith = append([]string(nil), a.conflictsWith...)
+	c.requires = append([]string(nil), a.requires...)
+	c.possibleValues = append([]string(nil), a.possibleValues...)
+	c.overridesWith = append([]string(nil), a.overridesWith...)
+	c.requiredUnless = append([]string(nil), a.requiredUnless...)
+	c.requiredIfEq = append([]conditionalRule(nil), a.requiredIfEq...)
+	c.defaultValueIfs = append([]conditionalDefault(nil), a.defaultValueIfs...)
+	return &c
 }
 
 func (a *Arg) isFlag() bool {

@@ -81,6 +81,26 @@ func (a *App) Multicall(b bool) *App {
 	return a
 }
 
+// Arg adds a builder-defined argument to the App's root command.
+// This allows mixing struct-tag arguments with dynamically constructed ones.
+func (a *App) Arg(arg *Arg) *App {
+	a.command.Arg(arg)
+	return a
+}
+
+// Subcommand adds a builder-defined subcommand to the App's root command.
+// This allows mixing struct-tag subcommands with dynamically constructed ones.
+func (a *App) Subcommand(sub *Command) *App {
+	a.command.Subcommand(sub)
+	return a
+}
+
+// ArgGroup adds an argument group to the App's root command.
+func (a *App) ArgGroup(group *ArgGroup) *App {
+	a.command.ArgGroup(group)
+	return a
+}
+
 // Parse parses args using the App's metadata and populates the target struct.
 func (a *App) Parse(args []string) (string, error) {
 	cmd, err := buildCommand(a.command, a.target)
@@ -95,6 +115,10 @@ func (a *App) Parse(args []string) (string, error) {
 	}
 
 	if err := writeBack(a.target, matches, cmd); err != nil {
+		return "", err
+	}
+
+	if err := runCallbacks(cmd, matches); err != nil {
 		return "", err
 	}
 

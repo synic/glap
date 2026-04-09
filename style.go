@@ -8,7 +8,7 @@ import (
 type ColorMode int
 
 const (
-	ColorAuto   ColorMode = iota
+	ColorAuto ColorMode = iota
 	ColorAlways
 	ColorNever
 )

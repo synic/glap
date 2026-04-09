@@ -1,6 +1,8 @@
 package glap
 
 import (
+	"fmt"
+	"reflect"
 	"strconv"
 )
 
@@ -98,6 +100,45 @@ func (m *Matches) GetFloat(name string) (float64, bool) {
 	return v, true
 }
 
+// GetInt64 returns the first value of the named argument parsed as an int64.
+func (m *Matches) GetInt64(name string) (int64, bool) {
+	ma, ok := m.args[name]
+	if !ok || len(ma.Values) == 0 {
+		return 0, false
+	}
+	v, err := strconv.ParseInt(ma.Values[0], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return v, true
+}
+
+// GetUint returns the first value of the named argument parsed as a uint.
+func (m *Matches) GetUint(name string) (uint, bool) {
+	ma, ok := m.args[name]
+	if !ok || len(ma.Values) == 0 {
+		return 0, false
+	}
+	v, err := strconv.ParseUint(ma.Values[0], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return uint(v), true
+}
+
+// GetUint64 returns the first value of the named argument parsed as a uint64.
+func (m *Matches) GetUint64(name string) (uint64, bool) {
+	ma, ok := m.args[name]
+	if !ok || len(ma.Values) == 0 {
+		return 0, false
+	}
+	v, err := strconv.ParseUint(ma.Values[0], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return v, true
+}
+
 // GetStringSlice returns all values of the named argument.
 func (m *Matches) GetStringSlice(name string) ([]string, bool) {
 	ma, ok := m.args[name]
@@ -123,6 +164,50 @@ func (m *Matches) GetSource(name string) (ValueSource, bool) {
 		return 0, false
 	}
 	return ma.Source, true
+}
+
+// Scan populates a struct from the parsed matches using glap struct tags.
+// This allows the builder API to write results into a struct without
+// needing the full struct-tag parsing pipeline.
+//
+//	var cfg Config
+//	matches.Scan(&cfg)
+func (m *Matches) Scan(target any) error {
+	v := reflect.ValueOf(target)
+	if v.Kind() != reflect.Ptr || v.Elem().Kind() != reflect.Struct {
+		return fmt.Errorf("glap: Scan target must be a pointer to a struct")
+	}
+	v = v.Elem()
+	t := v.Type()
+
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		tag := field.Tag.Get("glap")
+		if tag == "" || tag == "-" {
+			continue
+		}
+		name := tag
+		if idx := indexOf(tag, ','); idx >= 0 {
+			name = tag[:idx]
+		}
+		ma, ok := m.args[name]
+		if !ok {
+			continue
+		}
+		if err := setFieldValue(v.Field(i), field.Type, ma); err != nil {
+			return fmt.Errorf("glap: field %s: %w", field.Name, err)
+		}
+	}
+	return nil
+}
+
+func indexOf(s string, c byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
 }
 
 func (m *Matches) set(name string, value string, source ValueSource) {

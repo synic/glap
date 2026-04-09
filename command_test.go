@@ -1,6 +1,7 @@
 package glap
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -89,5 +90,123 @@ func TestMutSubcommand(t *testing.T) {
 
 	if app.FindSubcommand("serve").GetAbout() != "new description" {
 		t.Error("MutSubcommand should have updated about")
+	}
+}
+
+func TestRunCallback(t *testing.T) {
+	var called string
+	app := NewCommand("myapp").
+		Subcommand(NewCommand("serve").
+			Arg(NewArg("port").Default("8080")).
+			Run(func(m *Matches) error {
+				port, _ := m.GetString("port")
+				called = "serve:" + port
+				return nil
+			}))
+
+	_, err := app.Parse([]string{"serve", "--port", "3000"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if called != "serve:3000" {
+		t.Errorf("called = %q, want %q", called, "serve:3000")
+	}
+}
+
+func TestRunCallbackNested(t *testing.T) {
+	var called string
+	app := NewCommand("myapp").
+		Subcommand(NewCommand("remote").
+			Subcommand(NewCommand("add").
+				Arg(NewArg("name").Positional(true)).
+				Run(func(m *Matches) error {
+					name, _ := m.GetString("name")
+					called = "remote-add:" + name
+					return nil
+				})))
+
+	_, err := app.Parse([]string{"remote", "add", "origin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if called != "remote-add:origin" {
+		t.Errorf("called = %q, want %q", called, "remote-add:origin")
+	}
+}
+
+func TestRunCallbackError(t *testing.T) {
+	app := NewCommand("myapp").
+		Run(func(m *Matches) error {
+			return fmt.Errorf("handler failed")
+		})
+
+	_, err := app.Parse([]string{})
+	if err == nil || err.Error() != "handler failed" {
+		t.Errorf("err = %v, want 'handler failed'", err)
+	}
+}
+
+func TestRunCallbackNotCalledForParent(t *testing.T) {
+	parentCalled := false
+	app := NewCommand("myapp").
+		Run(func(m *Matches) error {
+			parentCalled = true
+			return nil
+		}).
+		Subcommand(NewCommand("sub").
+			Run(func(m *Matches) error { return nil }))
+
+	_, err := app.Parse([]string{"sub"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parentCalled {
+		t.Error("parent Run should not be called when subcommand matches")
+	}
+}
+
+func TestAppArg(t *testing.T) {
+	type CLI struct {
+		Verbose bool `glap:"verbose,short=v"`
+	}
+	var cli CLI
+	app := New(&cli).
+		Name("myapp").
+		Arg(NewArg("extra").Default("hello"))
+
+	_, err := app.Parse([]string{"-v"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cli.Verbose {
+		t.Error("Verbose should be true")
+	}
+}
+
+func TestAppSubcommand(t *testing.T) {
+	type CLI struct {
+		Verbose bool `glap:"verbose,short=v"`
+	}
+	var cli CLI
+
+	var called bool
+	app := New(&cli).
+		Name("myapp").
+		Subcommand(NewCommand("dynamic").
+			Arg(NewArg("flag").Action(SetTrue)).
+			Run(func(m *Matches) error {
+				called = true
+				return nil
+			}))
+
+	cmd, err := app.Parse([]string{"dynamic", "--flag"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd != "dynamic" {
+		t.Errorf("cmd = %q, want %q", cmd, "dynamic")
+	}
+	if !called {
+		t.Error("dynamic subcommand Run should have been called")
 	}
 }

@@ -4,14 +4,14 @@ import "slices"
 
 // Command represents a CLI command or subcommand with its arguments and configuration.
 type Command struct {
-	name               string
-	version            string
-	author             string
-	about              string
-	args               []*Arg
-	subcommands        []*Command
-	argGroups          []*ArgGroup
-	aliases            []string
+	name                 string
+	version              string
+	author               string
+	about                string
+	args                 []*Arg
+	subcommands          []*Command
+	argGroups            []*ArgGroup
+	aliases              []string
 	hidden               bool
 	subcommandRequired   bool
 	argRequiredElseHelp  bool
@@ -22,6 +22,8 @@ type Command struct {
 	colorMode            ColorMode
 	skipBinaryName       bool
 	multicall            bool
+	enableCompletions    bool
+	run                  func(*Matches) error
 }
 
 // NewCommand creates a new Command with the given name.
@@ -129,6 +131,14 @@ func (c *Command) Multicall(b bool) *Command {
 	return c
 }
 
+// Run sets a callback that is invoked when this command is matched during parsing.
+// The callback receives the Matches for this command. If it returns an error,
+// Parse returns that error. Builder API only.
+func (c *Command) Run(fn func(*Matches) error) *Command {
+	c.run = fn
+	return c
+}
+
 // GetName returns the command name.
 func (c *Command) GetName() string { return c.name }
 
@@ -170,9 +180,29 @@ func (c *Command) MutSubcommand(name string, fn func(*Command)) *Command {
 }
 
 // Parse parses the given arguments using the builder API and returns Matches.
+// If the matched command has a Run callback, it is invoked automatically.
 func (c *Command) Parse(args []string) (*Matches, error) {
 	c.injectHelpAndVersion()
-	return parseCommand(c, args)
+	m, err := parseCommand(c, args)
+	if err != nil {
+		return nil, err
+	}
+	if err := runCallbacks(c, m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func runCallbacks(cmd *Command, m *Matches) error {
+	if m.subcommandName != "" {
+		if sub := cmd.findSubcommand(m.subcommandName); sub != nil {
+			return runCallbacks(sub, m.subcommandMatches)
+		}
+	}
+	if cmd.run != nil {
+		return cmd.run(m)
+	}
+	return nil
 }
 
 // GenerateCompletion generates a shell completion script for this command.
