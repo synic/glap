@@ -7,7 +7,7 @@ width="150" align="right" alt="Gopher">
 A Go CLI argument parsing library inspired by Rust's
 [clap](https://github.com/clap-rs/clap).
 
-> **Beta (v0.0.1)** — This library is under active development.
+> **THIS LIBRARY IS BETA** — This library is under active development.
 > The API may change before v1.0.
 
 ## Features
