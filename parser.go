@@ -120,6 +120,7 @@ func parseCommand(cmd *Command, args []string) (*Matches, error) {
 			if a.action.takesValue() {
 				if hasValue {
 					setArgValue(m, a, value, SourceCLI)
+					i = consumeAdditionalValues(args, i, cmd, m, a)
 				} else if a.requireEquals {
 					return nil, &RequireEqualsError{Arg: a.name}
 				} else {
@@ -128,6 +129,7 @@ func parseCommand(cmd *Command, args []string) (*Matches, error) {
 						return nil, &TooFewValuesError{Arg: a.name, Min: 1, Got: 0}
 					}
 					setArgValue(m, a, args[i], SourceCLI)
+					i = consumeAdditionalValues(args, i, cmd, m, a)
 				}
 			} else {
 				handleNoValueArg(m, a)
@@ -158,6 +160,7 @@ func parseCommand(cmd *Command, args []string) (*Matches, error) {
 						}
 						setArgValue(m, a, args[i], SourceCLI)
 					}
+					i = consumeAdditionalValues(args, i, cmd, m, a)
 					break
 				}
 				handleNoValueArg(m, a)
@@ -235,18 +238,21 @@ func setArgValue(m *Matches, a *Arg, value string, source ValueSource) {
 	if a.valueDelimiter != "" {
 		parts := strings.Split(value, a.valueDelimiter)
 		for _, p := range parts {
-			m.appendValue(a.name, p, source)
+			storeArgValue(m, a, p, source)
 		}
 		applyOverrides(m, a)
 		return
 	}
-	switch a.action {
-	case Append:
-		m.appendValue(a.name, value, source)
-	default:
-		m.set(a.name, value, source)
-	}
+	storeArgValue(m, a, value, source)
 	applyOverrides(m, a)
+}
+
+func storeArgValue(m *Matches, a *Arg, value string, source ValueSource) {
+	if a.action == Append || a.acceptsMultipleValues() {
+		m.appendValue(a.name, value, source)
+		return
+	}
+	m.set(a.name, value, source)
 }
 
 func applyOverrides(m *Matches, a *Arg) {
@@ -270,25 +276,20 @@ func handleNoValueArg(m *Matches, a *Arg) {
 }
 
 func handlePositionalValue(m *Matches, a *Arg, value string) {
-	switch a.action {
-	case Append:
-		m.appendValue(a.name, value, SourceCLI)
-	default:
-		m.set(a.name, value, SourceCLI)
-	}
+	storeArgValue(m, a, value, SourceCLI)
 }
 
 func canAcceptMore(a *Arg, m *Matches) bool {
-	if a.action == Append {
-		if a.numArgs.Set && a.numArgs.Max > 0 {
-			ma, ok := m.args[a.name]
-			if ok && len(ma.Values) >= a.numArgs.Max {
-				return false
-			}
-		}
-		return true
+	if !a.action.acceptsValue() || (!a.action.acceptsMultipleValues() && !a.acceptsMultipleValues()) {
+		return false
 	}
-	return false
+	if a.numArgs.Set && a.numArgs.Max > 0 {
+		ma, ok := m.args[a.name]
+		if ok && len(ma.Values) >= a.numArgs.Max {
+			return false
+		}
+	}
+	return a.action == Append || a.acceptsMultipleValues()
 }
 
 func fillEnvAndDefaults(m *Matches, args []*Arg) error {
@@ -355,4 +356,47 @@ func formatVersion(cmd *Command) string {
 		return cmd.name + " " + cmd.version
 	}
 	return cmd.name
+}
+
+func consumeAdditionalValues(args []string, i int, cmd *Command, m *Matches, a *Arg) int {
+	if !a.expectsMultipleValuesPerOccurrence() {
+		return i
+	}
+
+	max := -1
+	if a.numArgs.Set {
+		max = a.numArgs.Max
+	}
+
+	for i+1 < len(args) {
+		if max >= 0 {
+			ma, ok := m.args[a.name]
+			if ok && len(ma.Values) >= max {
+				break
+			}
+		}
+
+		next := args[i+1]
+		if !tokenCanBeValue(cmd, a, next) {
+			break
+		}
+
+		i++
+		setArgValue(m, a, next, SourceCLI)
+	}
+
+	return i
+}
+
+func tokenCanBeValue(cmd *Command, a *Arg, token string) bool {
+	if token == "--" {
+		return false
+	}
+	if a.allowHyphenValues {
+		return true
+	}
+	if cmd.allowNegativeNumbers && isNegativeNumber(token) {
+		return true
+	}
+	return !strings.HasPrefix(token, "-")
 }

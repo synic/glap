@@ -678,6 +678,21 @@ func TestValueDelimiterStructTag(t *testing.T) {
 	}
 }
 
+func TestNumArgsOptionConsumesMultipleValues(t *testing.T) {
+	app := NewCommand("myapp").
+		Arg(NewArg("pair").SetNumArgs(2, 2))
+
+	m, err := app.Parse([]string{"--pair", "left", "right"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vals, ok := m.GetStringSlice("pair")
+	if !ok || len(vals) != 2 || vals[0] != "left" || vals[1] != "right" {
+		t.Fatalf("pair = %v, want [left right]", vals)
+	}
+}
+
 func TestArgRequiredElseHelp(t *testing.T) {
 	app := NewCommand("myapp").
 		ArgRequiredElseHelp(true).

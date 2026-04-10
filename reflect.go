@@ -9,15 +9,17 @@ import (
 
 // App wraps a struct pointer with optional metadata for the tag-based API.
 type App struct {
-	target  any
-	command *Command
+	target     any
+	command    *Command
+	validators map[string]func(string) error
 }
 
 // New creates a new App for the given struct pointer.
 func New(target any) *App {
 	return &App{
-		target:  target,
-		command: &Command{},
+		target:     target,
+		command:    &Command{},
+		validators: make(map[string]func(string) error),
 	}
 }
 
@@ -107,9 +109,16 @@ func (a *App) ArgGroup(group *ArgGroup) *App {
 	return a
 }
 
+// Validator registers a validation callback for a struct-tag-defined argument.
+// This brings custom validation to the tag-based API without changing tag syntax.
+func (a *App) Validator(name string, fn func(string) error) *App {
+	a.validators[name] = fn
+	return a
+}
+
 // Parse parses args using the App's metadata and populates the target struct.
 func (a *App) Parse(args []string) (string, error) {
-	cmd, err := buildCommand(a.command, a.target)
+	cmd, err := buildCommandWithValidators(a.command, a.target, a.validators)
 	if err != nil {
 		return "", err
 	}
@@ -139,6 +148,12 @@ func Parse(target any, args []string) (string, error) {
 }
 
 func buildCommand(cmd *Command, target any) (*Command, error) {
+	return buildCommandWithValidators(cmd, target, nil)
+}
+
+func buildCommandWithValidators(cmd *Command, target any, validators map[string]func(string) error) (*Command, error) {
+	cmd = cloneCommand(cmd, cmd.parent)
+
 	v := reflect.ValueOf(target)
 	if v.Kind() != reflect.Ptr || v.Elem().Kind() != reflect.Struct {
 		return nil, fmt.Errorf("glap: target must be a pointer to a struct")
@@ -164,7 +179,7 @@ func buildCommand(cmd *Command, target any) (*Command, error) {
 				ft = ft.Elem()
 			}
 			subTarget := reflect.New(ft).Interface()
-			sub, err := buildCommand(sub, subTarget)
+			sub, err := buildCommandWithValidators(sub, subTarget, validators)
 			if err != nil {
 				return nil, fmt.Errorf("glap: subcommand %s: %w", opts.name, err)
 			}
@@ -173,10 +188,50 @@ func buildCommand(cmd *Command, target any) (*Command, error) {
 		}
 
 		arg := buildArgFromTag(field, opts)
+		if validator, ok := validators[arg.name]; ok {
+			arg.validator = validator
+		}
 		cmd.args = append(cmd.args, arg)
 	}
 
 	return cmd, nil
+}
+
+func cloneCommand(cmd *Command, parent *Command) *Command {
+	if cmd == nil {
+		return nil
+	}
+
+	cloned := &Command{
+		name:                 cmd.name,
+		version:              cmd.version,
+		author:               cmd.author,
+		about:                cmd.about,
+		aliases:              append([]string(nil), cmd.aliases...),
+		hidden:               cmd.hidden,
+		subcommandRequired:   cmd.subcommandRequired,
+		argRequiredElseHelp:  cmd.argRequiredElseHelp,
+		allowNegativeNumbers: cmd.allowNegativeNumbers,
+		parent:               parent,
+		longAbout:            cmd.longAbout,
+		displayOrder:         cmd.displayOrder,
+		colorMode:            cmd.colorMode,
+		skipBinaryName:       cmd.skipBinaryName,
+		multicall:            cmd.multicall,
+		run:                  cmd.run,
+	}
+
+	for _, arg := range cmd.args {
+		cloned.args = append(cloned.args, arg.Clone())
+	}
+	for _, group := range cmd.argGroups {
+		cloned.argGroups = append(cloned.argGroups, group.Clone())
+	}
+	for _, sub := range cmd.subcommands {
+		cloned.subcommands = append(cloned.subcommands, cloneCommand(sub, cloned))
+	}
+
+	return cloned
 }
 
 func applySubcommandTagOptions(sub *Command, opts tagOpts) {
@@ -227,14 +282,14 @@ func buildArgFromTag(field reflect.StructField, opts tagOpts) *Arg {
 	if vn, ok := opts.get("value_name"); ok {
 		a.valueName = vn
 	}
-	if al, ok := opts.get("alias"); ok {
-		a.aliases = append(a.aliases, al)
+	for _, alias := range opts.values("alias") {
+		a.aliases = append(a.aliases, alias)
 	}
-	if c, ok := opts.get("conflicts_with"); ok {
-		a.conflictsWith = append(a.conflictsWith, c)
+	for _, conflict := range opts.values("conflicts_with") {
+		a.conflictsWith = append(a.conflictsWith, conflict)
 	}
-	if r, ok := opts.get("requires"); ok {
-		a.requires = append(a.requires, r)
+	for _, req := range opts.values("requires") {
+		a.requires = append(a.requires, req)
 	}
 	if g, ok := opts.get("group"); ok {
 		a.groupID = g
@@ -252,16 +307,16 @@ func buildArgFromTag(field reflect.StructField, opts tagOpts) *Arg {
 	if d, ok := opts.get("delimiter"); ok {
 		a.valueDelimiter = resolveDelimiterName(d)
 	}
-	if rie, ok := opts.get("required_if_eq"); ok {
+	for _, rie := range opts.values("required_if_eq") {
 		parts := strings.SplitN(rie, ":", 2)
 		if len(parts) == 2 {
 			a.requiredIfEq = append(a.requiredIfEq, conditionalRule{ArgName: parts[0], Value: parts[1]})
 		}
 	}
-	if ru, ok := opts.get("required_unless"); ok {
+	for _, ru := range opts.values("required_unless") {
 		a.requiredUnless = append(a.requiredUnless, ru)
 	}
-	if di, ok := opts.get("default_if"); ok {
+	for _, di := range opts.values("default_if") {
 		parts := strings.SplitN(di, ":", 3)
 		if len(parts) == 3 {
 			a.defaultValueIfs = append(a.defaultValueIfs, conditionalDefault{ArgName: parts[0], Value: parts[1], DefaultValue: parts[2]})
@@ -274,8 +329,8 @@ func buildArgFromTag(field reflect.StructField, opts tagOpts) *Arg {
 	if do, ok := opts.get("display_order"); ok {
 		a.displayOrder, _ = strconv.Atoi(do)
 	}
-	if ow, ok := opts.get("overrides_with"); ok {
-		a.overridesWith = append(a.overridesWith, ow)
+	for _, override := range opts.values("overrides_with") {
+		a.overridesWith = append(a.overridesWith, override)
 	}
 	if idx, ok := opts.get("index"); ok {
 		a.index, _ = strconv.Atoi(idx)
@@ -433,11 +488,58 @@ func setFieldValue(fv reflect.Value, ft reflect.Type, ma *MatchedArg) error {
 			fv.SetFloat(f)
 		}
 	case reflect.Slice:
-		if ft.Elem().Kind() == reflect.String {
-			fv.Set(reflect.ValueOf(ma.Values))
+		slice := reflect.MakeSlice(ft, 0, len(ma.Values))
+		for _, raw := range ma.Values {
+			elem, err := parseFieldValue(ft.Elem(), raw)
+			if err != nil {
+				return err
+			}
+			slice = reflect.Append(slice, elem)
 		}
+		fv.Set(slice)
 	}
 	return nil
+}
+
+func parseFieldValue(ft reflect.Type, raw string) (reflect.Value, error) {
+	switch ft.Kind() {
+	case reflect.String:
+		return reflect.ValueOf(raw).Convert(ft), nil
+	case reflect.Bool:
+		b, err := strconv.ParseBool(raw)
+		if err != nil {
+			return reflect.Value{}, err
+		}
+		v := reflect.New(ft).Elem()
+		v.SetBool(b)
+		return v, nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		n, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return reflect.Value{}, err
+		}
+		v := reflect.New(ft).Elem()
+		v.SetInt(n)
+		return v, nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		n, err := strconv.ParseUint(raw, 10, 64)
+		if err != nil {
+			return reflect.Value{}, err
+		}
+		v := reflect.New(ft).Elem()
+		v.SetUint(n)
+		return v, nil
+	case reflect.Float32, reflect.Float64:
+		f, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			return reflect.Value{}, err
+		}
+		v := reflect.New(ft).Elem()
+		v.SetFloat(f)
+		return v, nil
+	default:
+		return reflect.Value{}, fmt.Errorf("unsupported field type: %s", ft)
+	}
 }
 
 func resolveSubcommand(m *Matches) string {
@@ -454,13 +556,13 @@ func resolveSubcommand(m *Matches) string {
 // tagOpts parses the glap struct tag format.
 type tagOpts struct {
 	name  string
-	pairs map[string]string
+	pairs map[string][]string
 	flags map[string]bool
 }
 
 func parseTag(tag string) tagOpts {
 	opts := tagOpts{
-		pairs: make(map[string]string),
+		pairs: make(map[string][]string),
 		flags: make(map[string]bool),
 	}
 
@@ -472,7 +574,7 @@ func parseTag(tag string) tagOpts {
 	opts.name = parts[0]
 	for _, p := range parts[1:] {
 		if k, v, ok := strings.Cut(p, "="); ok {
-			opts.pairs[k] = v
+			opts.pairs[k] = append(opts.pairs[k], v)
 		} else {
 			opts.flags[p] = true
 		}
@@ -482,8 +584,15 @@ func parseTag(tag string) tagOpts {
 }
 
 func (o tagOpts) get(key string) (string, bool) {
-	v, ok := o.pairs[key]
-	return v, ok
+	vals, ok := o.pairs[key]
+	if !ok || len(vals) == 0 {
+		return "", false
+	}
+	return vals[len(vals)-1], true
+}
+
+func (o tagOpts) values(key string) []string {
+	return append([]string(nil), o.pairs[key]...)
 }
 
 func (o tagOpts) has(key string) bool {
@@ -537,5 +646,31 @@ func resolveDelimiterName(s string) string {
 }
 
 func splitTag(tag string) []string {
-	return strings.Split(tag, ",")
+	var parts []string
+	var current strings.Builder
+	escaped := false
+
+	for _, r := range tag {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+
+		switch r {
+		case '\\':
+			escaped = true
+		case ',':
+			parts = append(parts, current.String())
+			current.Reset()
+		default:
+			current.WriteRune(r)
+		}
+	}
+
+	if escaped {
+		current.WriteRune('\\')
+	}
+	parts = append(parts, current.String())
+	return parts
 }

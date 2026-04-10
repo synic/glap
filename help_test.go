@@ -301,3 +301,21 @@ func TestHelpShowsArgGroup(t *testing.T) {
 		t.Errorf("expected 'group: format' annotation on both args, got:\n%s", msg)
 	}
 }
+
+func TestStructTagEscapedCommaInHelp(t *testing.T) {
+	type CLI struct {
+		Name string `glap:"name,help=Last\\, First"`
+	}
+
+	var cli CLI
+	_, err := Parse(&cli, []string{"--help"})
+	var helpErr *HelpRequestedError
+	if !errors.As(err, &helpErr) {
+		t.Fatal("expected HelpRequestedError")
+	}
+
+	msg := stripANSI(helpErr.Message)
+	if !strings.Contains(msg, "Last, First") {
+		t.Fatalf("help missing escaped comma value:\n%s", msg)
+	}
+}

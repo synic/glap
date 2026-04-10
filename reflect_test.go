@@ -2,6 +2,8 @@ package glap
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -108,5 +110,73 @@ func TestSubcommandStructTagOptions(t *testing.T) {
 
 	if cmd.findSubcommand("s") == nil {
 		t.Error("subcommand not reachable via alias 's'")
+	}
+}
+
+func TestAppValidator(t *testing.T) {
+	type CLI struct {
+		Port int `glap:"port"`
+	}
+
+	var cli CLI
+	app := New(&cli).
+		Name("myapp").
+		Validator("port", func(v string) error {
+			if v == "0" {
+				return fmt.Errorf("port must be non-zero")
+			}
+			return nil
+		})
+
+	_, err := app.Parse([]string{"--port", "0"})
+	if err == nil {
+		t.Fatal("expected validator error")
+	}
+	if !strings.Contains(err.Error(), "port must be non-zero") {
+		t.Fatalf("validator error = %v", err)
+	}
+}
+
+func TestAppParseDoesNotAccumulateReflectedArgs(t *testing.T) {
+	type CLI struct {
+		Verbose bool `glap:"verbose,short=v"`
+	}
+
+	var cli CLI
+	app := New(&cli).Name("myapp")
+
+	_, err := app.Parse([]string{"-v"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cli.Verbose {
+		t.Fatal("verbose should be true after first parse")
+	}
+
+	cli.Verbose = false
+	_, err = app.Parse([]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cli.Verbose {
+		t.Fatal("verbose should remain false on second parse")
+	}
+	if len(app.command.args) != 0 {
+		t.Fatalf("template command should not retain reflected args, got %d", len(app.command.args))
+	}
+}
+
+func TestStructTagAppendIntoTypedSlice(t *testing.T) {
+	type CLI struct {
+		Ports []int `glap:"port,action=append"`
+	}
+
+	var cli CLI
+	_, err := Parse(&cli, []string{"--port", "80", "--port", "443"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cli.Ports) != 2 || cli.Ports[0] != 80 || cli.Ports[1] != 443 {
+		t.Fatalf("Ports = %v, want [80 443]", cli.Ports)
 	}
 }

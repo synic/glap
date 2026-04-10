@@ -31,3 +31,12 @@ func (g *ArgGroup) Multiple(b bool) *ArgGroup {
 	g.multiple = b
 	return g
 }
+
+func (g *ArgGroup) Clone() *ArgGroup {
+	return &ArgGroup{
+		name:     g.name,
+		args:     append([]string(nil), g.args...),
+		required: g.required,
+		multiple: g.multiple,
+	}
+}

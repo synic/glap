@@ -189,3 +189,22 @@ func TestUnknownArg(t *testing.T) {
 		t.Errorf("expected UnknownArgError, got %T: %v", err, err)
 	}
 }
+
+func TestRepeatedStructTagConflictRules(t *testing.T) {
+	type CLI struct {
+		A bool `glap:"a,conflicts_with=b,conflicts_with=c"`
+		B bool `glap:"b"`
+		C bool `glap:"c"`
+	}
+
+	var cli CLI
+	_, err := Parse(&cli, []string{"--a", "--b"})
+	if err == nil {
+		t.Fatal("expected conflict error for --b")
+	}
+
+	_, err = Parse(&cli, []string{"--a", "--c"})
+	if err == nil {
+		t.Fatal("expected conflict error for --c")
+	}
+}

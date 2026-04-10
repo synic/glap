@@ -96,6 +96,34 @@ func TestScan(t *testing.T) {
 	}
 }
 
+func TestScanTypedSlices(t *testing.T) {
+	type Config struct {
+		Ports []int     `glap:"port"`
+		Rates []float64 `glap:"rate"`
+	}
+
+	app := NewCommand("myapp").
+		Arg(NewArg("port").Action(Append)).
+		Arg(NewArg("rate").Action(Append))
+
+	m, err := app.Parse([]string{"--port", "80", "--port", "443", "--rate", "1.5", "--rate", "2.5"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var cfg Config
+	if err := m.Scan(&cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(cfg.Ports) != 2 || cfg.Ports[0] != 80 || cfg.Ports[1] != 443 {
+		t.Fatalf("Ports = %v, want [80 443]", cfg.Ports)
+	}
+	if len(cfg.Rates) != 2 || cfg.Rates[0] != 1.5 || cfg.Rates[1] != 2.5 {
+		t.Fatalf("Rates = %v, want [1.5 2.5]", cfg.Rates)
+	}
+}
+
 func TestScanNonPointer(t *testing.T) {
 	type Config struct{}
 	var cfg Config

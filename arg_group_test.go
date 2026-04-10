@@ -119,3 +119,17 @@ func TestArgGroupStructTagMembership(t *testing.T) {
 		t.Errorf("expected GroupViolationError, got %T: %v", err, err)
 	}
 }
+
+func TestArgGroupMultipleAllowsPartialMembership(t *testing.T) {
+	app := NewCommand("myapp").
+		Arg(NewArg("json").Action(SetTrue).Group("format")).
+		Arg(NewArg("text").Action(SetTrue).Group("format")).
+		ArgGroup(NewArgGroup("format").Multiple(true))
+
+	if _, err := app.Parse([]string{"--json"}); err != nil {
+		t.Fatalf("expected partial membership to be allowed, got %v", err)
+	}
+	if _, err := app.Parse([]string{"--json", "--text"}); err != nil {
+		t.Fatalf("expected multiple membership to be allowed, got %v", err)
+	}
+}

@@ -218,9 +218,6 @@ func validateGroups(cmd *Command, m *Matches) error {
 			if g.required && present == 0 {
 				return &GroupViolationError{Group: g.name, Message: "at least one argument is required"}
 			}
-			if present > 0 && present < len(members) {
-				return &GroupViolationError{Group: g.name, Message: "all arguments must be provided together"}
-			}
 		} else {
 			if g.required && present == 0 {
 				return &GroupViolationError{Group: g.name, Message: "one argument is required"}

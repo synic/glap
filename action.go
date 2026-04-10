@@ -37,3 +37,11 @@ func (a ArgAction) String() string {
 func (a ArgAction) takesValue() bool {
 	return a == Set || a == Append
 }
+
+func (a ArgAction) acceptsValue() bool {
+	return a.takesValue()
+}
+
+func (a ArgAction) acceptsMultipleValues() bool {
+	return a == Append
+}

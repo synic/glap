@@ -382,6 +382,23 @@ func (a *Arg) isFlag() bool {
 	return !a.positional
 }
 
+func (a *Arg) acceptsMultipleValues() bool {
+	if !a.action.takesValue() {
+		return false
+	}
+	if a.action == Append {
+		return true
+	}
+	return a.expectsMultipleValuesPerOccurrence()
+}
+
+func (a *Arg) expectsMultipleValuesPerOccurrence() bool {
+	if !a.numArgs.Set {
+		return false
+	}
+	return a.numArgs.Max != 1 || a.numArgs.Min > 1
+}
+
 // GetName returns the argument's name.
 func (a *Arg) GetName() string { return a.name }
 
