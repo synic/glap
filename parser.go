@@ -24,7 +24,16 @@ func parseCommand(cmd *Command, args []string) (*Matches, error) {
 			m.subcommandMatches = subMatches
 			return m, nil
 		}
-		if binName == cmd.name {
+		matched := binName == cmd.name
+		if !matched {
+			for _, alias := range cmd.aliases {
+				if alias == binName {
+					matched = true
+					break
+				}
+			}
+		}
+		if matched {
 			args = args[1:]
 		}
 	}
@@ -182,6 +191,10 @@ func parseCommand(cmd *Command, args []string) (*Matches, error) {
 
 	if err := validate(cmd, m, allArgs); err != nil {
 		return nil, err
+	}
+
+	if cmd.subcommandRequired && m.subcommandName == "" {
+		return nil, &HelpRequestedError{Message: generateHelp(cmd)}
 	}
 
 	return m, nil

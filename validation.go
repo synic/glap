@@ -169,10 +169,45 @@ func validateCustom(m *Matches, args []*Arg) error {
 }
 
 func validateGroups(cmd *Command, m *Matches) error {
+	// Collect group memberships declared on individual args via Arg.Group()
+	// or the struct-tag `group=...`. These are merged with the names
+	// explicitly added via ArgGroup.Arg(...).
+	extra := make(map[string][]string)
+	definedGroups := make(map[string]bool, len(cmd.argGroups))
 	for _, g := range cmd.argGroups {
+		definedGroups[g.name] = true
+	}
+	for _, a := range cmd.args {
+		if a.groupID == "" {
+			continue
+		}
+		if !definedGroups[a.groupID] {
+			return &UndefinedGroupError{Arg: a.name, Group: a.groupID}
+		}
+		extra[a.groupID] = append(extra[a.groupID], a.name)
+	}
+
+	for _, g := range cmd.argGroups {
+		members := make([]string, 0, len(g.args)+len(extra[g.name]))
+		seen := make(map[string]bool)
+		for _, argName := range g.args {
+			if seen[argName] {
+				continue
+			}
+			seen[argName] = true
+			members = append(members, argName)
+		}
+		for _, argName := range extra[g.name] {
+			if seen[argName] {
+				continue
+			}
+			seen[argName] = true
+			members = append(members, argName)
+		}
+
 		present := 0
 		var presentArgs []string
-		for _, argName := range g.args {
+		for _, argName := range members {
 			if _, ok := m.args[argName]; ok {
 				present++
 				presentArgs = append(presentArgs, argName)
@@ -183,7 +218,7 @@ func validateGroups(cmd *Command, m *Matches) error {
 			if g.required && present == 0 {
 				return &GroupViolationError{Group: g.name, Message: "at least one argument is required"}
 			}
-			if present > 0 && present < len(g.args) {
+			if present > 0 && present < len(members) {
 				return &GroupViolationError{Group: g.name, Message: "all arguments must be provided together"}
 			}
 		} else {

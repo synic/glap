@@ -193,3 +193,111 @@ func TestHideDefaultValueStructTag(t *testing.T) {
 		t.Error("port default should be hidden")
 	}
 }
+
+func TestHelpShowsPositionalArgs(t *testing.T) {
+	app := NewCommand("myapp").
+		Arg(NewArg("input").Positional(true).Required(true).Help("Path to input file")).
+		Arg(NewArg("output").Positional(true).Help("Path to output file"))
+
+	_, err := app.Parse([]string{"--help"})
+	var helpErr *HelpRequestedError
+	if !errors.As(err, &helpErr) {
+		t.Fatal("expected HelpRequestedError")
+	}
+
+	msg := stripANSI(helpErr.Message)
+	checks := []string{
+		"ARGS:",
+		"<INPUT>",
+		"Path to input file",
+		"[OUTPUT]",
+		"Path to output file",
+	}
+	for _, check := range checks {
+		if !strings.Contains(msg, check) {
+			t.Errorf("help output missing %q:\n%s", check, msg)
+		}
+	}
+}
+
+func TestHelpHidesHiddenPositional(t *testing.T) {
+	app := NewCommand("myapp").
+		Arg(NewArg("visible").Positional(true).Help("Visible positional")).
+		Arg(NewArg("secret").Positional(true).Hidden(true).Help("Secret positional"))
+
+	_, err := app.Parse([]string{"--help"})
+	var helpErr *HelpRequestedError
+	if !errors.As(err, &helpErr) {
+		t.Fatal("expected HelpRequestedError")
+	}
+
+	msg := stripANSI(helpErr.Message)
+	if !strings.Contains(msg, "Visible positional") {
+		t.Error("visible positional should appear in help")
+	}
+	if strings.Contains(msg, "Secret positional") {
+		t.Error("hidden positional should not appear in help")
+	}
+}
+
+func TestHelpShowsArgAliases(t *testing.T) {
+	app := NewCommand("myapp").
+		Arg(NewArg("config").Short('c').Alias("conf").Alias("cfg").Help("Config file"))
+
+	_, err := app.Parse([]string{"--help"})
+	var helpErr *HelpRequestedError
+	if !errors.As(err, &helpErr) {
+		t.Fatal("expected HelpRequestedError")
+	}
+
+	msg := stripANSI(helpErr.Message)
+	if !strings.Contains(msg, "--config") {
+		t.Errorf("help missing --config:\n%s", msg)
+	}
+	if !strings.Contains(msg, "--conf") {
+		t.Errorf("help missing --conf alias:\n%s", msg)
+	}
+	if !strings.Contains(msg, "--cfg") {
+		t.Errorf("help missing --cfg alias:\n%s", msg)
+	}
+}
+
+func TestHelpShowsSubcommandAliases(t *testing.T) {
+	app := NewCommand("myapp").
+		Subcommand(NewCommand("serve").Alias("s").Alias("server").About("Start the server"))
+
+	_, err := app.Parse([]string{"--help"})
+	var helpErr *HelpRequestedError
+	if !errors.As(err, &helpErr) {
+		t.Fatal("expected HelpRequestedError")
+	}
+
+	msg := stripANSI(helpErr.Message)
+	if !strings.Contains(msg, "serve") {
+		t.Errorf("help missing serve:\n%s", msg)
+	}
+	if !strings.Contains(msg, ", s") {
+		t.Errorf("help missing 's' alias:\n%s", msg)
+	}
+	if !strings.Contains(msg, "server") {
+		t.Errorf("help missing 'server' alias:\n%s", msg)
+	}
+}
+
+func TestHelpShowsArgGroup(t *testing.T) {
+	app := NewCommand("myapp").
+		Arg(NewArg("json").Action(SetTrue).Group("format").Help("JSON output")).
+		Arg(NewArg("text").Action(SetTrue).Group("format").Help("Text output")).
+		ArgGroup(NewArgGroup("format"))
+
+	_, err := app.Parse([]string{"--help"})
+	var helpErr *HelpRequestedError
+	if !errors.As(err, &helpErr) {
+		t.Fatal("expected HelpRequestedError")
+	}
+
+	msg := stripANSI(helpErr.Message)
+	if strings.Count(msg, "group: format") != 2 {
+		t.Errorf("expected 'group: format' annotation on both args, got:\n%s", msg)
+	}
+}

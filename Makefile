@@ -4,19 +4,36 @@ GOIMPORTS_REVISER := go run github.com/incu6us/goimports-reviser/v3@latest
 EXAMPLES := $(filter-out examples/workspace,$(wildcard examples/*/main.go))
 EXAMPLES := $(patsubst examples/%/main.go,%,$(EXAMPLES))
 
-.PHONY: build clean test vet format format-check check
+GLAP_SOURCES := $(wildcard *.go)
+EXAMPLE_BINARIES := $(addprefix $(BUILDDIR)/,$(EXAMPLES))
 
-build: clean
+.PHONY: build clean test test-examples vet format format-check check
+
+build: $(EXAMPLE_BINARIES)
+
+$(BUILDDIR)/%: examples/%/main.go $(GLAP_SOURCES)
 	@mkdir -p $(BUILDDIR)
-	@$(foreach ex,$(EXAMPLES),\
-		echo "Building examples/$(ex) -> $(BUILDDIR)/$(ex)" && \
-		GOWORK=$(GOWORK) go build -o $(BUILDDIR)/$(ex) ./examples/$(ex) &&) true
+	@echo "Building examples/$* -> $@"
+	@GOWORK=$(GOWORK) go build -o $@ ./examples/$*
 
 clean:
 	rm -rf $(BUILDDIR)
 
 test:
 	go test -v ./...
+
+test-examples: build
+	@failures=0; \
+	for ex in $(EXAMPLES); do \
+		if [ -x examples/$$ex/test.sh ]; then \
+			echo "Testing examples/$$ex"; \
+			examples/$$ex/test.sh $(abspath $(BUILDDIR))/$$ex || failures=$$((failures + 1)); \
+		fi; \
+	done; \
+	if [ $$failures -ne 0 ]; then \
+		echo "$$failures example test(s) failed"; \
+		exit 1; \
+	fi
 
 vet:
 	go vet ./...
@@ -36,4 +53,4 @@ format:
 	@echo "Fixing imports..."
 	@$(GOIMPORTS_REVISER) ./...
 
-check: format-check vet test
+check: format-check vet test test-examples

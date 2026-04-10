@@ -22,7 +22,6 @@ type Command struct {
 	colorMode            ColorMode
 	skipBinaryName       bool
 	multicall            bool
-	enableCompletions    bool
 	run                  func(*Matches) error
 }
 

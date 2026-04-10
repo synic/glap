@@ -17,6 +17,7 @@ func generateLongHelp(cmd *Command) string {
 func renderHelp(cmd *Command, long bool) string {
 	var b strings.Builder
 	s := newStyler(cmd.colorMode)
+	argGroup := buildArgGroupMap(cmd)
 
 	if cmd.name != "" {
 		b.WriteString(s.bold(cmd.name))
@@ -104,7 +105,23 @@ func renderHelp(cmd *Command, long bool) string {
 		b.WriteString("\n" + s.bold(g.heading+":") + "\n")
 		for _, a := range g.args {
 			b.WriteString("    ")
-			b.WriteString(formatArgHelpStyled(a, long, s))
+			b.WriteString(formatArgHelpStyled(a, long, s, argGroup))
+			b.WriteString("\n")
+		}
+	}
+
+	var positionals []*Arg
+	for _, a := range cmd.positionalArgs() {
+		if a.hidden {
+			continue
+		}
+		positionals = append(positionals, a)
+	}
+	if len(positionals) > 0 {
+		b.WriteString("\n" + s.bold("ARGS:") + "\n")
+		for _, a := range positionals {
+			b.WriteString("    ")
+			b.WriteString(formatPositionalHelpStyled(a, long, s, argGroup))
 			b.WriteString("\n")
 		}
 	}
@@ -121,13 +138,17 @@ func renderHelp(cmd *Command, long bool) string {
 			if sub.hidden {
 				continue
 			}
-			line := "    " + s.green(sub.name)
+			label := sub.name
+			if len(sub.aliases) > 0 {
+				label += ", " + strings.Join(sub.aliases, ", ")
+			}
+			line := "    " + s.green(label)
 			desc := sub.about
 			if long && sub.longAbout != "" {
 				desc = sub.longAbout
 			}
 			if desc != "" {
-				pad := 20 - len(sub.name)
+				pad := 20 - len(label)
 				if pad < 4 {
 					pad = 4
 				}
@@ -140,7 +161,24 @@ func renderHelp(cmd *Command, long bool) string {
 	return b.String()
 }
 
-func formatArgHelpStyled(a *Arg, long bool, s styler) string {
+func buildArgGroupMap(cmd *Command) map[string]string {
+	m := make(map[string]string)
+	for _, a := range cmd.args {
+		if a.groupID != "" {
+			m[a.name] = a.groupID
+		}
+	}
+	for _, g := range cmd.argGroups {
+		for _, name := range g.args {
+			if _, ok := m[name]; !ok {
+				m[name] = g.name
+			}
+		}
+	}
+	return m
+}
+
+func formatArgHelpStyled(a *Arg, long bool, s styler, argGroup map[string]string) string {
 	var b strings.Builder
 
 	if a.short != 0 {
@@ -149,6 +187,9 @@ func formatArgHelpStyled(a *Arg, long bool, s styler) string {
 		b.WriteString("    ")
 	}
 	b.WriteString(s.green("--" + a.long))
+	for _, alias := range a.aliases {
+		b.WriteString(", " + s.green("--"+alias))
+	}
 
 	if a.action.takesValue() {
 		vn := a.valueName
@@ -173,6 +214,51 @@ func formatArgHelpStyled(a *Arg, long bool, s styler) string {
 		b.WriteString(help)
 	}
 
+	annotations := argAnnotations(a, argGroup)
+	if len(annotations) > 0 {
+		b.WriteString(" " + s.dim("["+strings.Join(annotations, "] [")+"]"))
+	}
+
+	return b.String()
+}
+
+func formatPositionalHelpStyled(a *Arg, long bool, s styler, argGroup map[string]string) string {
+	var b strings.Builder
+
+	vn := a.valueName
+	if vn == "" {
+		vn = strings.ToUpper(a.name)
+	}
+	if a.required {
+		b.WriteString(s.cyan("<" + vn + ">"))
+	} else {
+		b.WriteString(s.cyan("[" + vn + "]"))
+	}
+
+	left := stripANSI(b.String())
+	pad := 30 - len(left)
+	if pad < 4 {
+		pad = 4
+	}
+	b.WriteString(strings.Repeat(" ", pad))
+
+	help := a.help
+	if long && a.longHelp != "" {
+		help = a.longHelp
+	}
+	if help != "" {
+		b.WriteString(help)
+	}
+
+	annotations := argAnnotations(a, argGroup)
+	if len(annotations) > 0 {
+		b.WriteString(" " + s.dim("["+strings.Join(annotations, "] [")+"]"))
+	}
+
+	return b.String()
+}
+
+func argAnnotations(a *Arg, argGroup map[string]string) []string {
 	var annotations []string
 	if a.envVar != "" {
 		annotations = append(annotations, fmt.Sprintf("env: %s", a.envVar))
@@ -186,11 +272,10 @@ func formatArgHelpStyled(a *Arg, long bool, s styler) string {
 	if a.required {
 		annotations = append(annotations, "required")
 	}
-	if len(annotations) > 0 {
-		b.WriteString(" " + s.dim("["+strings.Join(annotations, "] [")+"]"))
+	if g, ok := argGroup[a.name]; ok {
+		annotations = append(annotations, fmt.Sprintf("group: %s", g))
 	}
-
-	return b.String()
+	return annotations
 }
 
 func stripANSI(s string) string {

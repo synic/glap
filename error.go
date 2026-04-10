@@ -75,6 +75,14 @@ type (
 	RequireEqualsError struct {
 		Arg string
 	}
+
+	// UndefinedGroupError is returned when an argument references a group name
+	// via Arg.Group() or the `group=` struct tag that does not correspond to
+	// any ArgGroup defined on the command.
+	UndefinedGroupError struct {
+		Arg   string
+		Group string
+	}
 )
 
 func (e *UnknownArgError) Error() string {
@@ -123,4 +131,8 @@ func (e *ConditionalRequiredError) Error() string {
 
 func (e *RequireEqualsError) Error() string {
 	return fmt.Sprintf("argument '--%s' requires '=' syntax (--%s=value)", e.Arg, e.Arg)
+}
+
+func (e *UndefinedGroupError) Error() string {
+	return fmt.Sprintf("argument '--%s' references undefined group '%s'", e.Arg, e.Group)
 }

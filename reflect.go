@@ -51,6 +51,12 @@ func (a *App) ArgRequiredElseHelp(b bool) *App {
 	return a
 }
 
+// SubcommandRequired requires that a subcommand be provided.
+func (a *App) SubcommandRequired(b bool) *App {
+	a.command.subcommandRequired = b
+	return a
+}
+
 // AllowNegativeNumbers treats tokens like -1 and -3.14 as values instead of flags.
 func (a *App) AllowNegativeNumbers(b bool) *App {
 	a.command.allowNegativeNumbers = b
@@ -151,9 +157,7 @@ func buildCommand(cmd *Command, target any) (*Command, error) {
 
 		if opts.has("subcommand") {
 			sub := &Command{name: opts.name, parent: cmd}
-			if h, ok := opts.get("help"); ok {
-				sub.about = h
-			}
+			applySubcommandTagOptions(sub, opts)
 
 			ft := field.Type
 			if ft.Kind() == reflect.Ptr {
@@ -173,6 +177,33 @@ func buildCommand(cmd *Command, target any) (*Command, error) {
 	}
 
 	return cmd, nil
+}
+
+func applySubcommandTagOptions(sub *Command, opts tagOpts) {
+	if h, ok := opts.get("help"); ok {
+		sub.about = h
+	}
+	if lh, ok := opts.get("long_help"); ok {
+		sub.longAbout = lh
+	}
+	if v, ok := opts.get("version"); ok {
+		sub.version = v
+	}
+	if au, ok := opts.get("author"); ok {
+		sub.author = au
+	}
+	if al, ok := opts.get("alias"); ok {
+		sub.aliases = append(sub.aliases, al)
+	}
+	if do, ok := opts.get("display_order"); ok {
+		sub.displayOrder, _ = strconv.Atoi(do)
+	}
+	if opts.has("hidden") {
+		sub.hidden = true
+	}
+	if opts.has("subcommand_required") {
+		sub.subcommandRequired = true
+	}
 }
 
 func buildArgFromTag(field reflect.StructField, opts tagOpts) *Arg {

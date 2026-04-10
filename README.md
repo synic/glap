@@ -121,6 +121,22 @@ cmd, err := app.Parse(os.Args[1:])
 | `trailing_var_arg` | `trailing_var_arg` | Capture remaining |
 | `subcommand` | `subcommand` | Subcommand field |
 
+### Subcommand-specific tag keys
+
+On a field tagged `subcommand`, the following additional keys configure
+the nested command:
+
+| Key | Example | Description |
+| --- | ------- | ----------- |
+| `help` | `help=Desc` | Short description |
+| `long_help` | `long_help=...` | `--help` detail |
+| `version` | `version=1.0.0` | Subcommand version |
+| `author` | `author=Name` | Subcommand author |
+| `alias` | `alias=s` | Alternate invocation name |
+| `hidden` | `hidden` | Hide from parent help |
+| `display_order` | `display_order=2` | Subcommand help ordering |
+| `subcommand_required` | `subcommand_required` | Require a nested subcommand |
+
 ## Subcommands
 
 Pointer-to-struct fields. Nesting works to arbitrary depth.
@@ -153,10 +169,13 @@ corresponding struct tag syntax where applicable.
 See [examples/](examples/). Build them all with:
 
 ```bash
-./mage build
+make build
 ```
 
-Binaries are written to `build/`.
+Binaries are written to `build/`. Each example has a `test.sh` script
+that exercises its behavior end-to-end. Run them all with
+`make test-examples`, or as part of the full check suite with
+`make check`.
 
 | Example | Description |
 | ------- | ----------- |

@@ -704,6 +704,80 @@ func TestArgRequiredElseHelpWithArgs(t *testing.T) {
 	}
 }
 
+func TestSubcommandRequiredEmptyArgs(t *testing.T) {
+	app := NewCommand("myapp").
+		SubcommandRequired(true).
+		Subcommand(NewCommand("sub"))
+
+	_, err := app.Parse([]string{})
+	if err == nil {
+		t.Fatal("expected HelpRequestedError")
+	}
+	var helpErr *HelpRequestedError
+	if !errors.As(err, &helpErr) {
+		t.Errorf("expected HelpRequestedError, got %T: %v", err, err)
+	}
+}
+
+func TestSubcommandRequiredWithSubcommand(t *testing.T) {
+	app := NewCommand("myapp").
+		SubcommandRequired(true).
+		Subcommand(NewCommand("sub"))
+
+	m, err := app.Parse([]string{"sub"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.SubcommandName() != "sub" {
+		t.Errorf("SubcommandName = %q, want %q", m.SubcommandName(), "sub")
+	}
+}
+
+func TestSubcommandNotRequiredEmptyArgs(t *testing.T) {
+	app := NewCommand("myapp").
+		Subcommand(NewCommand("sub"))
+
+	m, err := app.Parse([]string{})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if m.SubcommandName() != "" {
+		t.Errorf("SubcommandName = %q, want empty", m.SubcommandName())
+	}
+}
+
+func TestSubcommandRequiredWithRootArgOnly(t *testing.T) {
+	app := NewCommand("myapp").
+		SubcommandRequired(true).
+		Arg(NewArg("flag").Long("flag").Action(SetTrue)).
+		Subcommand(NewCommand("sub"))
+
+	_, err := app.Parse([]string{"--flag"})
+	if err == nil {
+		t.Fatal("expected HelpRequestedError")
+	}
+	var helpErr *HelpRequestedError
+	if !errors.As(err, &helpErr) {
+		t.Errorf("expected HelpRequestedError, got %T: %v", err, err)
+	}
+}
+
+func TestSubcommandRequiredMissingRequiredArgTakesPrecedence(t *testing.T) {
+	app := NewCommand("myapp").
+		SubcommandRequired(true).
+		Arg(NewArg("config").Long("config").Required(true)).
+		Subcommand(NewCommand("sub"))
+
+	_, err := app.Parse([]string{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var missingErr *MissingRequiredError
+	if !errors.As(err, &missingErr) {
+		t.Errorf("expected MissingRequiredError, got %T: %v", err, err)
+	}
+}
+
 func TestSkipBinaryName(t *testing.T) {
 	app := NewCommand("myapp").
 		SkipBinaryName(true).
@@ -765,6 +839,22 @@ func TestMulticallFallthrough(t *testing.T) {
 	}
 	if v, _ := m.GetBool("flag"); !v {
 		t.Error("flag should be true when multicall falls through to self")
+	}
+}
+
+func TestMulticallRootAlias(t *testing.T) {
+	app := NewCommand("myapp").
+		Multicall(true).
+		Alias("alt").
+		Arg(NewArg("flag").Action(SetTrue)).
+		Subcommand(NewCommand("sub"))
+
+	m, err := app.Parse([]string{"alt", "--flag"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := m.GetBool("flag"); !v {
+		t.Error("flag should be true when multicall falls through via root alias")
 	}
 }
 

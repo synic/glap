@@ -326,7 +326,11 @@ func (a *Arg) RequireEquals(b bool) *Arg {
 	return a
 }
 
-// Index sets the explicit 1-based positional index. Implies Positional(true).
+// Index sets the sort order for this positional argument. Implies Positional(true).
+// Positionals with lower Index values consume values first; positionals without
+// an explicit index are filled after indexed ones. This controls the order in
+// which positionals consume values, not the absolute position in argv: values
+// are still consumed from whatever non-flag tokens come next, in the sorted order.
 //
 // Struct tag: index=N
 func (a *Arg) Index(n int) *Arg {

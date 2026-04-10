@@ -28,9 +28,7 @@ func main() {
 			Help("Input file").
 			Required(true).
 			ValueName("FILE")).
-		ArgGroup(glap.NewArgGroup("format").
-			Arg("json").Arg("text").Arg("yaml").
-			Required(true))
+		ArgGroup(glap.NewArgGroup("format").Required(true))
 
 	matches, err := app.Parse(os.Args[1:])
 	if err != nil {
